@@ -102,38 +102,50 @@ async function chatJson<T>(system: string, user: string): Promise<T> {
 }
 
 async function searchCatalog(query: string, maxPrice: number | null) {
-  const body = {
-    query,
-    config: { mode: "agentic", country: "US", currency: "USD" },
-    limit: 24,
-    filters: {
-      availability: ["InStock"],
-      // shortcut: a hard budget filter can return zero products; add a
-      // broaden-and-rank fallback when empty results become a real case.
-      ...(maxPrice ? { price: { max_price: maxPrice } } : {}),
-    },
+  const search = (priceCap: number | null) => {
+    const body = {
+      query,
+      // The generated query is already a broad, single-category phrase.
+      // Agentic mode is LLM-planned and intermittently returns empty for these;
+      // default lexical + semantic search is the reliable choice here.
+      config: { mode: "default", country: "US", currency: "USD" },
+      limit: 24,
+      filters: {
+        availability: ["InStock"],
+        ...(priceCap ? { price: { max_price: priceCap } } : {}),
+      },
+    };
+
+    return cached(`channel3:${JSON.stringify(body)}`, async () => {
+      const response = await fetch(CHANNEL3_URL, {
+        method: "POST",
+        headers: {
+          "x-api-key": requireKey("CHANNEL3_API_KEY"),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(45_000),
+      });
+
+      if (!response.ok) {
+        throw new Error(
+          `Channel3 API ${response.status}: ${(await response.text()).slice(0, 300)}`,
+        );
+      }
+
+      const data = (await response.json()) as { products?: Channel3Product[] };
+      return data.products ?? [];
+    });
   };
 
-  return cached(`channel3:${JSON.stringify(body)}`, async () => {
-    const response = await fetch(CHANNEL3_URL, {
-      method: "POST",
-      headers: {
-        "x-api-key": requireKey("CHANNEL3_API_KEY"),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(45_000),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Channel3 API ${response.status}: ${(await response.text()).slice(0, 300)}`,
-      );
-    }
-
-    const data = (await response.json()) as { products?: Channel3Product[] };
-    return data.products ?? [];
-  });
+  // A hard budget filter or a transient empty search should not sink the whole
+  // case. Retry without the cap, then give the search one more shot.
+  const attempts = maxPrice ? [maxPrice, null, null] : [null, null];
+  for (const cap of attempts) {
+    const products = await search(cap);
+    if (products.length > 0) return products;
+  }
+  return [];
 }
 
 function slugify(value: string) {

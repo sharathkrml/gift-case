@@ -19,7 +19,8 @@ const caveat = Caveat({
 
 export const metadata: Metadata = {
   title: "The Gift Case",
-  description: "Describe the person. The detective does the rest.",
+  description:
+    "The gift-finding platform for people who are hard to shop for.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

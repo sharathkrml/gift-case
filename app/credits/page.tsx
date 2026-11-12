@@ -22,7 +22,7 @@ export default async function CreditsPage({
   return (
     <main className="main">
       <div className="main-inner">
-        <Link href="/" className="back-link">
+        <Link href="/case" className="back-link">
           ← Back to the board
         </Link>
         <h1>Case credits</h1>

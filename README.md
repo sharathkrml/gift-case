@@ -17,14 +17,14 @@ Open http://localhost:3000.
 
 Sign-in and sign-up are handled by [Clerk](https://clerk.com) via `@clerk/nextjs`. The provider is in `app/layout.tsx`, the Next 16 middleware is `proxy.ts`, and the routes are `app/sign-in/[[...sign-in]]` and `app/sign-up/[[...sign-up]]`. Keys live in `.env.local`; pull them with `bunx clerk@latest env pull` if they go missing.
 
-Every page except sign-in/sign-up requires an account. API routes return a JSON `401` when signed out.
+The landing page (`/`) and sign-in/sign-up are public. The case board lives at `/case` and requires an account; API routes return a JSON `401` when signed out.
 
 ## Case generation
 
 `POST /api/cases` runs the real pipeline:
 
 1. NVIDIA NIM (`nvidia/nemotron-3.5-lightning-30b-a3b`) reads the brief and returns the case title, clues, log lines, budget, and a product search query.
-2. Channel3 agentic search returns catalog products within the budget.
+2. Channel3 product search returns catalog products, filtered to the budget when one is stated.
 3. NVIDIA NIM ranks the products, links each to clues, and writes the detective notes.
 
 Keys live in `.env.local` as `NVIDIA_API_KEY` and `CHANNEL3_API_KEY`. Development API responses are cached in `.cache/` (gitignored); delete that folder to force fresh calls.
@@ -45,12 +45,13 @@ Credits and purchase IDs live in Clerk `privateMetadata`. This is a demo store; 
 
 ## Other seams
 
-- **History:** generated cases are saved to `localStorage` under `gift-case:cases:v1:<userId>`. Seeded cases come from `SEED_CASES`. Old unscoped history is migrated once.
+- **History:** generated cases are saved to `localStorage` under `gift-case:cases:v1:<userId>`. The archive starts empty. Old unscoped history is migrated once. In the sidebar, “Select cases” enables multi-select (with “Select all”) and deletion for the signed-in user.
 - **Auth:** real accounts via Clerk; case history is still local to the browser.
 
 ## Structure
 
-- `app/page.tsx` — case generation, log typing, credits, history state
+- `app/page.tsx` — public landing page; explains the board and routes signed-in users to `/case`
+- `app/case/page.tsx` — case generation, log typing, credits, history state
 - `app/credits/page.tsx` — credit balance and PayPal packs
 - `app/api/credits/capture/route.ts` — PayPal return capture
 - `app/credits/complete/page.tsx` — purchase confirmation

@@ -21,7 +21,7 @@ export default async function CompletePage({
   return (
     <main className="main">
       <div className="main-inner">
-        <Link href="/" className="back-link">
+        <Link href="/case" className="back-link">
           ← Back to the board
         </Link>
         <h1>{failed ? "Payment not confirmed" : "Payment received"}</h1>
@@ -45,7 +45,7 @@ export default async function CompletePage({
                 : "This payment was already applied."}{" "}
               You now have {credits} case{credits === 1 ? "" : "s"} left.
             </p>
-            <Link href="/" className="go-link">
+            <Link href="/case" className="go-link">
               Open a case
             </Link>
           </>

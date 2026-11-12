@@ -5,7 +5,10 @@ export default function SignUpPage() {
   return (
     <div style={{ display: "flex", minHeight: "100vh", alignItems: "center", justifyContent: "center" }}>
       <Suspense>
-        <SignUp />
+        <SignUp
+          fallbackRedirectUrl="/case"
+          signInFallbackRedirectUrl="/case"
+        />
       </Suspense>
     </div>
   );

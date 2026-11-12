@@ -1,6 +1,6 @@
 import { clerkMiddleware } from "@clerk/nextjs/server";
 
-const PUBLIC_PAGES = ["/sign-in", "/sign-up"];
+const PUBLIC_PAGES = ["/", "/sign-in", "/sign-up"];
 
 export default clerkMiddleware(async (auth, request) => {
   const { pathname } = request.nextUrl;

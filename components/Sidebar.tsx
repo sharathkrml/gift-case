@@ -9,7 +9,7 @@ import {
   type CSSProperties,
 } from "react";
 import { createPortal } from "react-dom";
-import { UserButton, useClerk, useUser } from "@clerk/nextjs";
+import { UserButton, useUser } from "@clerk/nextjs";
 import type { GiftCase } from "@/lib/types";
 import { useReducedMotion } from "@/lib/useReducedMotion";
 
@@ -21,6 +21,7 @@ type SidebarProps = {
   open: boolean;
   onClose: () => void;
   onNewCase: () => void;
+  onDeleteCases: (ids: string[]) => void;
   onSelectCase: (giftCase: GiftCase) => void;
 };
 
@@ -161,13 +162,19 @@ function CaseFile({
   index,
   total,
   active,
+  selecting,
+  selected,
   onSelect,
+  onToggleSelected,
 }: {
   giftCase: GiftCase;
   index: number;
   total: number;
   active: boolean;
+  selecting: boolean;
+  selected: boolean;
   onSelect: (giftCase: GiftCase) => void;
+  onToggleSelected: (giftCase: GiftCase) => void;
 }) {
   const caseSuspects = giftCase.products?.length ?? 0;
   const caseClues = giftCase.clues?.length ?? 0;
@@ -177,10 +184,17 @@ function CaseFile({
     <li style={{ "--i": index } as CSSProperties}>
       <button
         type="button"
-        className="case-item"
-        aria-current={active ? "page" : undefined}
-        title={giftCase.title}
-        onClick={() => onSelect(giftCase)}
+        className={`case-item${selected ? " selected" : ""}`}
+        aria-current={!selecting && active ? "page" : undefined}
+        aria-pressed={selecting ? selected : undefined}
+        title={
+          selecting
+            ? `${selected ? "Deselect" : "Select"} ${giftCase.title}`
+            : giftCase.title
+        }
+        onClick={() =>
+          selecting ? onToggleSelected(giftCase) : onSelect(giftCase)
+        }
       >
         <span className="case-tab" aria-hidden="true">
           Case {String(total - index).padStart(3, "0")}
@@ -201,6 +215,11 @@ function CaseFile({
               {shortDate(giftCase.createdAt)}
             </span>
           </span>
+          {selecting && (
+            <span className="case-check" aria-hidden="true">
+              {selected ? "✓" : ""}
+            </span>
+          )}
         </span>
       </button>
     </li>
@@ -240,13 +259,15 @@ export function Sidebar({
   open,
   onClose,
   onNewCase,
+  onDeleteCases,
   onSelectCase,
 }: SidebarProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const selectButtonRef = useRef<HTMLButtonElement>(null);
+  const newCaseButtonRef = useRef<HTMLButtonElement>(null);
   const handoffTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handoffId = useRef(0);
-  const { isLoaded, user } = useUser();
-  const { openSignIn, openSignUp } = useClerk();
+  const { user } = useUser();
   const reduceMotion = useReducedMotion();
   const mounted = useSyncExternalStore(
     subscribeToClient,
@@ -254,6 +275,12 @@ export function Sidebar({
     getServerSnapshot,
   );
   const [handoff, setHandoff] = useState<Handoff | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const allSelected = cases.length > 0 && selectedIds.size === cases.length;
 
   const suspectCount = cases.reduce(
     (total, giftCase) => total + (giftCase.products?.length ?? 0),
@@ -317,6 +344,52 @@ export function Sidebar({
     });
   };
 
+  const toggleSelected = (giftCase: GiftCase) => {
+    setSelectedIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(giftCase.id)) next.delete(giftCase.id);
+      else next.add(giftCase.id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(
+      allSelected ? new Set() : new Set(cases.map((giftCase) => giftCase.id)),
+    );
+  };
+
+  const startSelection = () => {
+    setSelectedIds(new Set());
+    setSelecting(true);
+  };
+
+  const cancelSelection = () => {
+    setSelecting(false);
+    setSelectedIds(new Set());
+    requestAnimationFrame(() => selectButtonRef.current?.focus());
+  };
+
+  const deleteSelected = () => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    if (
+      !window.confirm(
+        `Delete ${count} case file${count === 1 ? "" : "s"}? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+
+    onDeleteCases([...selectedIds]);
+    setSelectedIds(new Set());
+    setSelecting(false);
+    requestAnimationFrame(() => {
+      if (cases.length === count) newCaseButtonRef.current?.focus();
+      else selectButtonRef.current?.focus();
+    });
+  };
+
   const renderCase = (giftCase: GiftCase, index: number) => (
     <CaseFile
       key={giftCase.id}
@@ -324,7 +397,10 @@ export function Sidebar({
       index={index}
       total={cases.length}
       active={giftCase.id === activeId}
+      selecting={selecting}
+      selected={selectedIds.has(giftCase.id)}
       onSelect={handleSelect}
+      onToggleSelected={toggleSelected}
     />
   );
 
@@ -358,7 +434,9 @@ export function Sidebar({
         <div className="sidebar-head">
           <div className="masthead">
             <span className="masthead-kicker">Case archive</span>
-            <span className="brand">The Gift Case</span>
+            <Link href="/" className="brand">
+              The Gift Case
+            </Link>
           </div>
           <button
             type="button"
@@ -392,13 +470,81 @@ export function Sidebar({
           </div>
         </div>
 
-        <button type="button" className="new-case" onClick={onNewCase}>
+        <button
+          type="button"
+          className="new-case"
+          ref={newCaseButtonRef}
+          onClick={() => {
+            if (selecting) {
+              setSelecting(false);
+              setSelectedIds(new Set());
+            }
+            onNewCase();
+          }}
+        >
           <NewCaseIcon />
           Open new case
         </button>
 
+        {cases.length > 0 && (
+          <div
+            className="archive-tools"
+            role="group"
+            aria-label="Select case files"
+          >
+            {selecting ? (
+              <>
+                <button
+                  type="button"
+                  className="archive-tool"
+                  onClick={toggleSelectAll}
+                >
+                  {allSelected ? "Clear all" : "Select all"}
+                </button>
+                <button
+                  type="button"
+                  className="archive-tool danger"
+                  onClick={deleteSelected}
+                  disabled={selectedIds.size === 0}
+                >
+                  Delete
+                  {selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}
+                </button>
+                <button
+                  type="button"
+                  className="archive-tool"
+                  onClick={cancelSelection}
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="archive-tool"
+                ref={selectButtonRef}
+                onClick={startSelection}
+              >
+                Select cases
+              </button>
+            )}
+            <span className="sr-only" role="status">
+              {selecting
+                ? `${selectedIds.size} of ${cases.length} case files selected.`
+                : ""}
+            </span>
+          </div>
+        )}
+
         <nav className="side-scroll" aria-label="Case files">
           {pendingTitle && <PendingFile title={pendingTitle} />}
+
+          {groups?.length === 0 && (
+            <p className="archive-empty">
+              No case files yet. Open your first case and it will be filed
+              here.
+            </p>
+          )}
 
           {groups ? (
             groups.map((group) => (
@@ -428,55 +574,22 @@ export function Sidebar({
           </Link>
         </div>
 
-        <div className="user">
-          {isLoaded && user ? (
-            <>
-              <span className="badge-photo">
-                <UserButton />
-              </span>
-              <div className="user-meta">
-                <span className="user-role">Detective</span>
-                <div className="user-name">
-                  {user.fullName ?? user.username ?? "Detective"}
-                </div>
-                <div className="user-links">
-                  <span>Badge #{badgeNumber(user.id)}</span>
-                </div>
+        {user && (
+          <div className="user">
+            <span className="badge-photo">
+              <UserButton />
+            </span>
+            <div className="user-meta">
+              <span className="user-role">Detective</span>
+              <div className="user-name">
+                {user.fullName ?? user.username ?? "Detective"}
               </div>
-            </>
-          ) : (
-            <>
-              <span className="badge-photo">
-                <span className="avatar" aria-hidden="true">
-                  G
-                </span>
-              </span>
-              <div className="user-meta">
-                <span className="user-role">Guest</span>
-                <div className="user-name">Guest detective</div>
-                <div className="user-links">
-                  <button
-                    type="button"
-                    className="user-link accent"
-                    disabled={!isLoaded}
-                    onClick={() => openSignIn()}
-                  >
-                    Sign in
-                  </button>
-                  <span aria-hidden="true">·</span>
-                  <button
-                    type="button"
-                    className="user-link"
-                    disabled={!isLoaded}
-                    onClick={() => openSignUp()}
-                  >
-                    Sign up
-                  </button>
-                </div>
+              <div className="user-links">
+                <span>Badge #{badgeNumber(user.id)}</span>
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </aside>
     </>
   );

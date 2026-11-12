@@ -2,7 +2,7 @@
 
 **Status:** Draft v0.1 (derived from prototype)
 **Source of truth for current behavior:** [`docs/prototype.html`](./docs/prototype.html) (original single-file prototype)
-**Implementation:** Next.js 16 App Router + TypeScript in this repo. `POST /api/cases` runs NVIDIA NIM extraction/ranking and Channel3 agentic product search; see the README for the pipeline and environment keys.
+**Implementation:** Next.js 16 App Router + TypeScript in this repo. `POST /api/cases` runs NVIDIA NIM extraction/ranking and Channel3 product search; see the README for the pipeline and environment keys.
 **Owner:** [FILL IN: name]
 **Last updated:** 2026-11-12
 **Build target:** [FILL IN: launch date or milestone]
@@ -560,7 +560,7 @@ Already present: focus-visible outlines (3 px red, 2 px offset), `aria-label` on
 
 ### 12.1 Recommendation
 
-Implemented as a **Next.js 16 App Router** project with TypeScript and plain CSS (no Tailwind). The board and case history are live; case generation is still the dummy in `lib/cases.ts`. The target architecture is:
+Implemented as a **Next.js 16 App Router** project with TypeScript and plain CSS (no Tailwind). The landing page, board, case history, and case generation are live. The target architecture is:
 
 ```
 Browser (Next.js client components)
@@ -582,7 +582,8 @@ Browser (Next.js client components)
 /
   app/
     layout.tsx        fonts, metadata, ClerkProvider
-    page.tsx          case generation, log typing, history state
+    page.tsx          public landing page
+    case/page.tsx     case generation, log typing, history state
     globals.css       all styling and design tokens
     sign-in/[[...sign-in]]/page.tsx   Clerk sign-in
     sign-up/[[...sign-up]]/page.tsx   Clerk sign-up
@@ -591,7 +592,7 @@ Browser (Next.js client components)
     CaseBoard.tsx     clues, suspects, strings, detail panel
     Sidebar.tsx       case history, new case, Clerk account footer
   lib/
-    cases.ts          seed cases + formatting helpers
+    cases.ts          formatting and brief-title helpers
     generate-case.ts  NIM extraction, Channel3 search, NIM ranking
     cache.ts          dev-only upstream response cache
     types.ts

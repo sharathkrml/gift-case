@@ -15,12 +15,17 @@ export async function cached<T>(key: string, load: () => Promise<T>): Promise<T>
   );
 
   try {
-    return JSON.parse(await readFile(file, "utf8")) as T;
+    const cachedValue = JSON.parse(await readFile(file, "utf8")) as T;
+    // Ignore stale empty-list entries written before empty results were skipped.
+    if (!Array.isArray(cachedValue) || cachedValue.length > 0) return cachedValue;
   } catch {
     // No cache entry yet.
   }
 
   const value = await load();
+  // Empty lists are usually transient provider misses. Caching one would make
+  // a temporary empty result permanent for that query.
+  if (Array.isArray(value) && value.length === 0) return value;
   await mkdir(CACHE_DIR, { recursive: true });
   await writeFile(file, JSON.stringify(value));
   return value;
