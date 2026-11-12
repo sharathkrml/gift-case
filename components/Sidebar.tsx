@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import { UserButton, useClerk, useUser } from "@clerk/nextjs";
 import type { GiftCase } from "@/lib/types";
 import { useReducedMotion } from "@/lib/useReducedMotion";
@@ -10,16 +17,36 @@ type SidebarProps = {
   cases: GiftCase[];
   activeId: string | null;
   credits: number | null;
+  pendingTitle: string | null;
   open: boolean;
   onClose: () => void;
   onNewCase: () => void;
   onSelectCase: (giftCase: GiftCase) => void;
 };
 
+type CaseGroup = {
+  id: "today" | "week" | "earlier";
+  label: string;
+  items: { giftCase: GiftCase; index: number }[];
+};
+
+type Handoff = {
+  id: number;
+  d: string;
+  ax: number;
+  ay: number;
+  bx: number;
+  by: number;
+};
+
 const DATE_FORMAT = new Intl.DateTimeFormat("en-US", {
   month: "short",
   day: "numeric",
 });
+
+const subscribeToClient = () => () => {};
+const getClientSnapshot = () => true;
+const getServerSnapshot = () => false;
 
 function shortDate(value: string) {
   const date = new Date(value);
@@ -32,6 +59,33 @@ function badgeNumber(id: string) {
     hash = (hash * 31 + character.charCodeAt(0)) % 9000;
   }
   return String(1000 + hash);
+}
+
+function groupCases(cases: GiftCase[]): CaseGroup[] {
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfWeek = new Date(startOfToday);
+  startOfWeek.setDate(startOfWeek.getDate() - 6);
+
+  const groups: CaseGroup[] = [
+    { id: "today", label: "Today", items: [] },
+    { id: "week", label: "This week", items: [] },
+    { id: "earlier", label: "Earlier", items: [] },
+  ];
+
+  cases.forEach((giftCase, index) => {
+    const created = new Date(giftCase.createdAt);
+    const bucket = Number.isNaN(created.getTime())
+      ? 2
+      : created >= startOfToday
+        ? 0
+        : created >= startOfWeek
+          ? 1
+          : 2;
+    groups[bucket].items.push({ giftCase, index });
+  });
+
+  return groups.filter((group) => group.items.length > 0);
 }
 
 function NewCaseIcon() {
@@ -102,19 +156,104 @@ function CountUp({ value, animate }: { value: number; animate: boolean }) {
   return <>{shown}</>;
 }
 
+function CaseFile({
+  giftCase,
+  index,
+  total,
+  active,
+  onSelect,
+}: {
+  giftCase: GiftCase;
+  index: number;
+  total: number;
+  active: boolean;
+  onSelect: (giftCase: GiftCase) => void;
+}) {
+  const caseSuspects = giftCase.products?.length ?? 0;
+  const caseClues = giftCase.clues?.length ?? 0;
+  const topSuspect = giftCase.products?.[0];
+
+  return (
+    <li style={{ "--i": index } as CSSProperties}>
+      <button
+        type="button"
+        className="case-item"
+        aria-current={active ? "page" : undefined}
+        title={giftCase.title}
+        onClick={() => onSelect(giftCase)}
+      >
+        <span className="case-tab" aria-hidden="true">
+          Case {String(total - index).padStart(3, "0")}
+        </span>
+        <span className="case-row">
+          <span
+            className="case-polaroid"
+            style={{ background: topSuspect?.tint ?? "#9a7a4f" }}
+            aria-hidden="true"
+          >
+            {topSuspect?.emoji ?? "🗂️"}
+          </span>
+          <span className="case-info">
+            <span className="case-title">{giftCase.title}</span>
+            <span className="case-meta">
+              {caseSuspects} suspect{caseSuspects === 1 ? "" : "s"} ·{" "}
+              {caseClues} clue{caseClues === 1 ? "" : "s"} ·{" "}
+              {shortDate(giftCase.createdAt)}
+            </span>
+          </span>
+        </span>
+      </button>
+    </li>
+  );
+}
+
+function PendingFile({ title }: { title: string }) {
+  return (
+    <div className="case-item case-pending" role="status">
+      <span className="case-tab" aria-hidden="true">
+        Working
+      </span>
+      <span className="case-row">
+        <span
+          className="case-polaroid case-polaroid-pending"
+          aria-hidden="true"
+        >
+          🔎
+        </span>
+        <span className="case-info">
+          <span className="case-title">{title}</span>
+          <span className="case-meta">
+            <span className="pending-dot" aria-hidden="true" />
+            Gathering evidence…
+          </span>
+        </span>
+      </span>
+    </div>
+  );
+}
+
 export function Sidebar({
   cases,
   activeId,
   credits,
+  pendingTitle,
   open,
   onClose,
   onNewCase,
   onSelectCase,
 }: SidebarProps) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const handoffTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const handoffId = useRef(0);
   const { isLoaded, user } = useUser();
   const { openSignIn, openSignUp } = useClerk();
   const reduceMotion = useReducedMotion();
+  const mounted = useSyncExternalStore(
+    subscribeToClient,
+    getClientSnapshot,
+    getServerSnapshot,
+  );
+  const [handoff, setHandoff] = useState<Handoff | null>(null);
 
   const suspectCount = cases.reduce(
     (total, giftCase) => total + (giftCase.products?.length ?? 0),
@@ -124,13 +263,83 @@ export function Sidebar({
     (total, giftCase) => total + (giftCase.clues?.length ?? 0),
     0,
   );
+  const groups = mounted ? groupCases(cases) : null;
 
   useEffect(() => {
     if (open) closeButtonRef.current?.focus();
   }, [open]);
 
+  useEffect(() => {
+    return () => {
+      if (handoffTimer.current) clearTimeout(handoffTimer.current);
+    };
+  }, []);
+
+  const handleSelect = (giftCase: GiftCase) => {
+    onSelectCase(giftCase);
+    if (
+      open ||
+      reduceMotion ||
+      window.matchMedia("(max-width: 900px)").matches
+    ) {
+      return;
+    }
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const source = document.querySelector<HTMLElement>(
+          '#case-history .case-item[aria-current="page"]',
+        );
+        const target = document.querySelector<HTMLElement>("[data-product]");
+        if (!source || !target) return;
+
+        const from = source.getBoundingClientRect();
+        const to = target.getBoundingClientRect();
+        if (!to.width) return;
+
+        const ax = from.right - 6;
+        const ay = from.top + from.height / 2;
+        const bx = to.left + to.width / 2;
+        const by = to.top + 6;
+        const sag = 40 + Math.abs(bx - ax) * 0.08;
+
+        setHandoff({
+          id: ++handoffId.current,
+          d: `M${ax},${ay} Q${(ax + bx) / 2},${Math.max(ay, by) + sag} ${bx},${by}`,
+          ax,
+          ay,
+          bx,
+          by,
+        });
+        if (handoffTimer.current) clearTimeout(handoffTimer.current);
+        handoffTimer.current = setTimeout(() => setHandoff(null), 1400);
+      });
+    });
+  };
+
+  const renderCase = (giftCase: GiftCase, index: number) => (
+    <CaseFile
+      key={giftCase.id}
+      giftCase={giftCase}
+      index={index}
+      total={cases.length}
+      active={giftCase.id === activeId}
+      onSelect={handleSelect}
+    />
+  );
+
   return (
     <>
+      {handoff &&
+        createPortal(
+          <svg key={handoff.id} className="handoff" aria-hidden="true">
+            <path d={handoff.d} pathLength={1} />
+            <circle cx={handoff.ax} cy={handoff.ay} r={4} />
+            <circle cx={handoff.bx} cy={handoff.by} r={5} />
+          </svg>,
+          document.body,
+        )}
+
       {open && (
         <button
           type="button"
@@ -188,58 +397,23 @@ export function Sidebar({
           Open new case
         </button>
 
-        <div className="side-section">
-          <span>Case files</span>
-          <span className="side-count" aria-hidden="true">
-            {String(cases.length).padStart(2, "0")}
-          </span>
-        </div>
-
         <nav className="side-scroll" aria-label="Case files">
-          <ul className="case-list">
-            {cases.map((giftCase, index) => {
-              const active = giftCase.id === activeId;
-              const caseSuspects = giftCase.products?.length ?? 0;
-              const caseClues = giftCase.clues?.length ?? 0;
-              const topSuspect = giftCase.products?.[0];
+          {pendingTitle && <PendingFile title={pendingTitle} />}
 
-              return (
-                <li
-                  key={giftCase.id}
-                  style={{ "--i": index } as CSSProperties}
-                >
-                  <button
-                    type="button"
-                    className="case-item"
-                    aria-current={active ? "page" : undefined}
-                    title={giftCase.title}
-                    onClick={() => onSelectCase(giftCase)}
-                  >
-                    <span className="case-tab" aria-hidden="true">
-                      Case {String(cases.length - index).padStart(3, "0")}
-                    </span>
-                    <span className="case-row">
-                      <span
-                        className="case-polaroid"
-                        style={{ background: topSuspect?.tint ?? "#9a7a4f" }}
-                        aria-hidden="true"
-                      >
-                        {topSuspect?.emoji ?? "🗂️"}
-                      </span>
-                      <span className="case-info">
-                        <span className="case-title">{giftCase.title}</span>
-                        <span className="case-meta">
-                          {caseSuspects} suspect{caseSuspects === 1 ? "" : "s"}{" "}
-                          · {caseClues} clue{caseClues === 1 ? "" : "s"} ·{" "}
-                          {shortDate(giftCase.createdAt)}
-                        </span>
-                      </span>
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          {groups ? (
+            groups.map((group) => (
+              <div className="case-group" key={group.id}>
+                <h2 className="case-group-label">{group.label}</h2>
+                <ul className="case-list">
+                  {group.items.map(({ giftCase, index }) =>
+                    renderCase(giftCase, index),
+                  )}
+                </ul>
+              </div>
+            ))
+          ) : (
+            <ul className="case-list">{cases.map(renderCase)}</ul>
+          )}
         </nav>
 
         <div className="side-wallet">

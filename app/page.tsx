@@ -5,7 +5,7 @@ import { useUser } from "@clerk/nextjs";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { CaseBoard } from "@/components/CaseBoard";
 import { Sidebar } from "@/components/Sidebar";
-import { SEED_CASES } from "@/lib/cases";
+import { SEED_CASES, titleFromBrief } from "@/lib/cases";
 import type { GiftCase } from "@/lib/types";
 import { useReducedMotion } from "@/lib/useReducedMotion";
 
@@ -39,6 +39,7 @@ export default function Home() {
   const [activeCase, setActiveCase] = useState<GiftCase | null>(null);
   const [activeAnimate, setActiveAnimate] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [pendingTitle, setPendingTitle] = useState<string | null>(null);
   const [log, setLog] = useState("");
   const [error, setError] = useState("");
   const [outOfCredits, setOutOfCredits] = useState(false);
@@ -129,6 +130,7 @@ export default function Home() {
     controllerRef.current?.abort();
     controllerRef.current = null;
     setBusy(false);
+    setPendingTitle(null);
   };
 
   const typeLog = async (lines: string[], currentRun: number) => {
@@ -157,6 +159,7 @@ export default function Home() {
     controllerRef.current = controller;
 
     setBusy(true);
+    setPendingTitle(titleFromBrief(trimmed));
     setError("");
     setOutOfCredits(false);
     setLog("Witness statement logged.\nRunning the leads through the search…\n");
@@ -200,6 +203,7 @@ export default function Home() {
       await wait(reduceMotion ? 0 : 500);
       if (runId.current !== currentRun) return;
 
+      setPendingTitle(null);
       setCustomCases((previous) => [nextCase, ...previous]);
       setActiveCase(nextCase);
       setActiveAnimate(true);
@@ -207,6 +211,7 @@ export default function Home() {
       await typing;
     } catch (caught) {
       if (runId.current !== currentRun || controller.signal.aborted) return;
+      setPendingTitle(null);
       setLog("");
       setError(
         caught instanceof Error
@@ -214,7 +219,10 @@ export default function Home() {
           : "The trail went cold. Try the case again.",
       );
     } finally {
-      if (runId.current === currentRun) setBusy(false);
+      if (runId.current === currentRun) {
+        setBusy(false);
+        setPendingTitle(null);
+      }
     }
   };
 
@@ -261,6 +269,7 @@ export default function Home() {
         cases={cases}
         activeId={activeCase?.id ?? null}
         credits={credits}
+        pendingTitle={pendingTitle}
         open={sidebarOpen}
         onClose={closeSidebar}
         onNewCase={handleNewCase}
