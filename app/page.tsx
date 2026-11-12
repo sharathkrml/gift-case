@@ -238,7 +238,10 @@ export default function Home() {
     setOutOfCredits(false);
     setLog("Case file reopened. Evidence restored from the board.\n");
     setSidebarOpen(false);
-    menuButtonRef.current?.focus();
+    // The menu button is display:none on desktop; keep focus on the chosen file there.
+    if (window.matchMedia("(max-width: 900px)").matches) {
+      menuButtonRef.current?.focus();
+    }
   };
 
   const closeSidebar = () => {
@@ -257,6 +260,7 @@ export default function Home() {
       <Sidebar
         cases={cases}
         activeId={activeCase?.id ?? null}
+        credits={credits}
         open={sidebarOpen}
         onClose={closeSidebar}
         onNewCase={handleNewCase}
