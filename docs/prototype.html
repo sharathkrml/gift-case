@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Gift Case: Detective Corkboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Caveat:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --page:#e9dcc3; --wood:#4a2f1a; --cork:#c4955d; --cork-dot:#a97a46; --paper:#f4edd8; --ink:#2a2118;
+  --note:#f6e06a; --note-ink:#3a2f10; --red:#c8202b; --muted:#6e5b44; --shadow:rgba(30,15,5,.45);
+  color-scheme:light;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --page:#17110b; --wood:#2b1b0f; --cork:#7b5836; --cork-dot:#5f4228; --paper:#e2d9bd; --ink:#241c12;
+    --note:#d9c04f; --note-ink:#2d2409; --muted:#a8957a; --shadow:rgba(0,0,0,.6); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --page:#17110b; --wood:#2b1b0f; --cork:#7b5836; --cork-dot:#5f4228; --paper:#e2d9bd; --ink:#241c12;
+  --note:#d9c04f; --note-ink:#2d2409; --muted:#a8957a; --shadow:rgba(0,0,0,.6); color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--page);color:var(--ink);font-family:"Special Elite","Courier New",monospace;line-height:1.5}
+.wrap{max-width:1100px;margin:0 auto;padding:20px 16px 48px}
+h1{font-size:clamp(1.6rem,4.5vw,2.6rem);margin:0 0 4px;letter-spacing:.02em;color:var(--ink)}
+.sub{margin:0 0 18px;color:var(--muted)}
+.file{background:var(--paper);padding:16px;border:1px solid var(--muted);box-shadow:3px 4px 0 var(--shadow);position:relative}
+.file label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:6px}
+textarea{width:100%;min-height:96px;font:inherit;background:transparent;border:1px dashed var(--muted);color:var(--ink);padding:10px;resize:vertical}
+textarea:focus-visible,button:focus-visible,.prod:focus-visible{outline:3px solid var(--red);outline-offset:2px}
+.row{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:10px}
+button.go{font:inherit;background:var(--red);color:#fff;border:0;padding:10px 18px;cursor:pointer;transform:rotate(-1deg);box-shadow:2px 3px 0 var(--shadow)}
+button.go:disabled{opacity:.55;cursor:wait}
+.log{min-height:3.2em;margin:16px 0 10px;white-space:pre-wrap}
+.caret::after{content:"▌";animation:blink 1s steps(2) infinite}
+@keyframes blink{50%{opacity:0}}
+.board{position:relative;background-color:var(--cork);background-image:radial-gradient(var(--cork-dot) 1.2px,transparent 1.5px),radial-gradient(var(--cork-dot) 1px,transparent 1.4px);background-size:14px 14px,23px 23px;background-position:0 0,7px 9px;border:14px solid var(--wood);box-shadow:inset 0 0 40px var(--shadow),4px 6px 0 var(--shadow);padding:22px 16px 30px;min-height:360px}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:var(--ink);opacity:.7;padding:20px}
+#notes{display:flex;flex-wrap:wrap;gap:18px 22px;justify-content:center;margin-bottom:64px;position:relative;z-index:2}
+#prods{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:26px 20px;position:relative;z-index:2}
+.note{background:var(--note);color:var(--note-ink);font-family:"Caveat","Comic Sans MS",cursive;font-size:1.45rem;padding:14px 16px 10px;min-width:130px;text-align:center;box-shadow:2px 4px 6px var(--shadow);opacity:0;transform:translateY(-40px) rotate(var(--r));}
+.note.in{opacity:1;transform:rotate(var(--r));transition:transform .45s cubic-bezier(.3,1.6,.5,1),opacity .2s}
+.prod{background:#fbf8ee;color:#2a2118;padding:10px 10px 12px;box-shadow:2px 5px 8px var(--shadow);opacity:0;transform:scale(1.25) rotate(var(--r));cursor:pointer;border:0;font:inherit;text-align:left;position:relative}
+.prod.in{opacity:1;transform:rotate(var(--r));transition:transform .4s cubic-bezier(.3,1.5,.5,1),opacity .2s}
+.prod:hover,.prod.sel{transform:rotate(0) scale(1.04);z-index:5}
+.pic{height:96px;display:grid;place-items:center;font-size:2.8rem;background:var(--bg);filter:saturate(.8)}
+.pn{margin:8px 0 0;font-size:.92rem;line-height:1.25}
+.pp{color:#6e5b44;font-size:.85rem}
+.bar{height:6px;background:#d9cfb5;margin-top:6px}
+.bar i{display:block;height:100%;background:var(--red);width:0;transition:width .8s .2s}
+.stamp{position:absolute;top:-10px;right:-14px;border:3px solid var(--red);color:var(--red);font-size:.78rem;padding:2px 6px;transform:rotate(12deg);background:#fbf8ee;opacity:0}
+.stamp.in{opacity:1;animation:thud .35s ease-out}
+@keyframes thud{from{transform:rotate(12deg) scale(2.2);opacity:0}to{transform:rotate(12deg) scale(1);opacity:1}}
+svg#strings{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:3;overflow:visible}
+svg#strings path{fill:none;stroke:var(--red);stroke-width:2.2;stroke-linecap:round;filter:drop-shadow(1px 2px 1px var(--shadow));transition:opacity .25s}
+svg#strings circle{fill:#8a1018;stroke:#fff3;stroke-width:1}
+.dim path{opacity:.1}
+.dim path.hot{opacity:1;stroke-width:3.2}
+.detail{margin-top:18px;background:var(--paper);padding:14px 16px;border-left:6px solid var(--red);box-shadow:3px 4px 0 var(--shadow);min-height:70px}
+.foot{margin-top:14px;font-size:.8rem;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.note,.prod{transition:none!important}.caret::after{animation:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>The Gift Case</h1>
+  <p class="sub">Describe the person. The detective does the rest.</p>
+
+  <div class="file">
+    <label for="brief">Witness statement</label>
+    <textarea id="brief">My dad, 58, hates anything with a screen, lives for fishing, and would never admit he cares how he looks. Under $120.</textarea>
+    <div class="row">
+      <button class="go" id="go">Open the case</button>
+      <span class="foot">Dummy data. Swap in a real search at the marked spot in the script.</span>
+    </div>
+  </div>
+
+  <div class="log caret" id="log"></div>
+
+  <div class="board" id="board">
+    <div class="empty" id="empty">The board is empty.<br>Open a case to start pinning evidence.</div>
+    <svg id="strings" aria-hidden="true"></svg>
+    <div id="notes"></div>
+    <div id="prods"></div>
+  </div>
+
+  <div class="detail" id="detail" aria-live="polite">Click any photo on the board to read the detective’s notes on it.</div>
+</div>
+
+<script>
+// ---- Dummy data. Replace searchCase() with a Channel3 call:
+// client.products.search({ query: brief, config: { mode: "agentic" } })
+const NOTES = [
+  {id:"age",  t:"58 years old"},
+  {id:"tech", t:"Allergic to screens"},
+  {id:"fish", t:"Fishing fanatic"},
+  {id:"vain", t:"Secretly vain"},
+  {id:"cash", t:"Under $120"}
+];
+const PRODUCTS = [
+  {n:"Polarized Fishing Sunglasses", p:"$89",  e:"🕶️", c:"#7fa6a8", s:94, l:["fish","vain","cash","age"], why:"Cuts the glare on the water and sharpens his jawline. He will claim it is purely for the fish."},
+  {n:"Analog Tide Watch",            p:"$110", e:"⌚", c:"#a89a7f", s:81, l:["tech","vain","cash"],       why:"Tells the time and the tide. No notifications, no battery anxiety. Passes the screen test."},
+  {n:"Waxed Canvas Bucket Hat",      p:"$58",  e:"🧢", c:"#8f9a6a", s:76, l:["fish","vain","cash"],       why:"Looks like it has survived ten seasons on day one. That is exactly the look he wants."},
+  {n:"Leather Tackle Roll",          p:"$65",  e:"🎣", c:"#a8764f", s:72, l:["fish","tech","cash"],       why:"Pure analog craft. He will organise it in a way nobody else understands."},
+  {n:"Cedar Tin Grooming Kit",       p:"$48",  e:"🧴", c:"#b09a74", s:68, l:["vain","age","cash"],        why:"Beard balm and a comb, in a tin that looks like fishing gear. Plausible deniability included."},
+  {n:"Merino Fishing Henley",        p:"$74",  e:"👕", c:"#6f8aa0", s:63, l:["fish","vain","age"],        why:"Warm on the boat, sharp at the pub. A safe bet if the glasses miss."}
+];
+const LOG = [
+  "Subject: the father. Age 58.",
+  "Known weakness: any device with a screen.",
+  "Obsession on file: fishing. Vanity: denied, but suspected.",
+  "Running the leads through the search…"
+];
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const rnd = (a,b) => a + Math.random()*(b-a);
+const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+let busy = false;
+
+async function typeLog(lines){
+  const el = $("#log"); el.textContent = ""; el.classList.add("caret");
+  for (const line of lines){
+    for (const ch of line){ el.textContent += ch; if(!reduce) await sleep(16); }
+    el.textContent += "\n"; await sleep(reduce?0:180);
+  }
+  el.classList.remove("caret");
+}
+
+function drawStrings(animate){
+  const svg = $("#strings"), box = $("#board").getBoundingClientRect();
+  svg.innerHTML = "";
+  const pin = el => { const r = el.getBoundingClientRect(); return [r.left - box.left + r.width/2, r.top - box.top + 6]; };
+  const items = [];
+  PRODUCTS.forEach((p,pi) => p.l.forEach(id => {
+    const a = pin($("#note-"+id)), b = pin($("#prod-"+pi));
+    const sag = 30 + Math.abs(a[0]-b[0])*.08;
+    const path = document.createElementNS("http://www.w3.org/2000/svg","path");
+    path.setAttribute("d", `M${a[0]},${a[1]} Q${(a[0]+b[0])/2},${Math.max(a[1],b[1])+sag} ${b[0]},${b[1]}`);
+    path.dataset.p = pi; svg.appendChild(path); items.push(path);
+    [a,b].forEach(pt => { const c = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      c.setAttribute("cx",pt[0]); c.setAttribute("cy",pt[1]); c.setAttribute("r",4); svg.appendChild(c); });
+  }));
+  if(animate && !reduce) items.forEach((path,i) => {
+    const len = path.getTotalLength();
+    path.style.strokeDasharray = len; path.style.strokeDashoffset = len;
+    path.getBoundingClientRect();
+    path.style.transition = `stroke-dashoffset .6s ${i*70}ms ease-out`;
+    path.style.strokeDashoffset = 0;
+  });
+  return items.length;
+}
+
+function select(i){
+  const svg = $("#strings"), cards = document.querySelectorAll(".prod");
+  const on = !cards[i].classList.contains("sel");
+  cards.forEach(c => c.classList.remove("sel"));
+  svg.classList.toggle("dim", on);
+  svg.querySelectorAll("path").forEach(p => p.classList.toggle("hot", on && +p.dataset.p === i));
+  const p = PRODUCTS[i];
+  if(on){
+    cards[i].classList.add("sel");
+    $("#detail").innerHTML = `<strong>${p.n}</strong> (${p.p}) · suspicion ${p.s}%<br>${p.why}`;
+  } else $("#detail").textContent = "Click any photo on the board to read the detective’s notes on it.";
+}
+
+// Stand-in for the real search call.
+async function searchCase(brief){ await sleep(300); return {notes:NOTES, products:PRODUCTS}; }
+
+async function openCase(){
+  if(busy) return; busy = true; $("#go").disabled = true;
+  $("#empty").style.display = "none"; $("#strings").innerHTML = ""; $("#strings").classList.remove("dim");
+  $("#notes").innerHTML = ""; $("#prods").innerHTML = "";
+  $("#detail").textContent = "Gathering evidence…";
+  const logDone = typeLog(LOG);
+  const data = await searchCase($("#brief").value);
+
+  data.notes.forEach(n => { const d = document.createElement("div");
+    d.className = "note"; d.id = "note-"+n.id; d.textContent = n.t; d.style.setProperty("--r", rnd(-5,5)+"deg"); $("#notes").appendChild(d); });
+  data.products.forEach((p,i) => { const b = document.createElement("button");
+    b.className = "prod"; b.id = "prod-"+i; b.style.setProperty("--r", rnd(-3.5,3.5)+"deg");
+    b.setAttribute("aria-label", p.n+", "+p.p+", suspicion "+p.s+" percent");
+    b.innerHTML = `<div class="pic" style="--bg:${p.c}">${p.e}</div><div class="pn">${p.n}</div><div class="pp">${p.p}</div><div class="bar"><i></i></div><span class="stamp">PRIME SUSPECT</span>`;
+    b.onclick = () => select(i); $("#prods").appendChild(b); });
+
+  await sleep(500);
+  for (const el of document.querySelectorAll(".note")){ el.classList.add("in"); await sleep(reduce?0:260); }
+  for (const el of document.querySelectorAll(".prod")){ el.classList.add("in"); await sleep(reduce?0:220); }
+  await sleep(500);
+  drawStrings(true);
+  document.querySelectorAll(".prod").forEach((c,i) => c.querySelector(".bar i").style.width = PRODUCTS[i].s+"%");
+  await logDone; await sleep(reduce?0:900);
+  document.querySelector(".stamp").classList.add("in");
+  $("#detail").innerHTML = `<strong>Case closed… almost.</strong> The ${PRODUCTS[0].n} connects to four clues. Click it, or any other photo, to follow the red string.`;
+  busy = false; $("#go").disabled = false;
+}
+
+$("#go").onclick = openCase;
+addEventListener("resize", () => { if($("#note-age")) drawStrings(false); });
+</script>
+</body>
+</html>
